@@ -6,15 +6,15 @@ import torch.nn.functional as F
 
 
 class Bottleneck(nn.Module):
+    expansion = 4
     def __init__(self, in_channels, out_channels, stride=1):
         super(Bottleneck, self).__init__()
-        self.expansion = 4
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3,
-                               stride=out_channels, padding=1, bias=False)
+                               stride=stride, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels)
-        self.conv3 = nn.Conv2d(out_channels, self.expansion*out_channels)
+        self.conv3 = nn.Conv2d(out_channels, self.expansion*out_channels, kernel_size=1)
         self.bn3 = nn.BatchNorm2d(self.expansion*out_channels)
         self.shortcut = nn.Sequential()
         if stride != 1 or in_channels != self.expansion*out_channels:
@@ -26,6 +26,7 @@ class Bottleneck(nn.Module):
         self.act = nn.ReLU()
 
     def forward(self, x):
+        input = x
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.act(x)
@@ -34,7 +35,7 @@ class Bottleneck(nn.Module):
         x = self.act(x)      
         x = self.conv3(x)
         x = self.bn3(x)
-        x += self.shortcut(x)
+        x += self.shortcut(input)
         x = self.act(x)
         return x
     
@@ -56,9 +57,22 @@ class ResNet(nn.Module):
     def _make_layer(self, block, num_channels, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
         layers = []
+        print(strides)
         for stride in strides:
             layers.append(block(self.in_channels, num_channels, stride))
             self.in_channels = num_channels * block.expansion
         return nn.Sequential(*layers)
+
+
+    def forward(self, x):
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = F.avg_pool2d(x, 4)
+        x = x.view(x.size(0), -1)
+        x = self.linear(x)
+        return x
 
 

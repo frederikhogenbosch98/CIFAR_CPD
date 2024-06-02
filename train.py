@@ -24,10 +24,10 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = torchvision.datasets.CIFAR10(root='/data', train=True, download=True, transform=transform_train)
+trainset = torchvision.datasets.CIFAR10(root='data/', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.CIFAR10(root='/data', train=False, download=True, transform=transform_test)
+testset = torchvision.datasets.CIFAR10(root='data/', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=2)
 
 classes = ['plane', 'car', 'bird', 'cat', 'deer', \
@@ -41,7 +41,7 @@ else:
 
 NUM_EPCOHS = 100
 
-model = ResNet(block_depths=[2,2,6,2])
+model = ResNet(block_depths=[2,2,6,2]).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(),
                                     lr=1e-4, 
@@ -50,35 +50,37 @@ criterion = nn.CrossEntropyLoss()
 
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.25) 
 
-for epoch in range(NUM_EPCOHS):
-    with tqdm.tqdm(trainloader, unit="batch", leave=False) as tepoch:
-        for images, labels in tqdm.tqdm(tepoch):
+if __name__ == '__main__':
+
+    for epoch in range(NUM_EPCOHS):
+        with tqdm.tqdm(trainloader, unit="batch", leave=False) as tepoch:
+            for images, labels in tqdm.tqdm(tepoch):
+                images, labels = images.to(device), labels.to(device)
+                output = model(images)
+                loss = criterion(output, labels)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+            scheduler.step()
+
+
+    model.to(device)
+    model.eval()
+
+
+    correct = 0
+    total = 0
+    test_accuracy = []
+    with torch.no_grad():
+        for images, labels in testloader:
             images, labels = images.to(device), labels.to(device)
             output = model(images)
-            loss = criterion(output, labels)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            _, predicted = torch.max(output.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+        
 
-        scheduler.step()
-
-
-model.to(device)
-model.eval()
-
-
-correct = 0
-total = 0
-test_accuracy = []
-with torch.no_grad():
-    for images, labels in testloader:
-        images, labels = images.to(device), labels.to(device)
-        output = model(images)
-        _, predicted = torch.max(output.data, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
-    
-
-accuracy = 100 * correct / total
-print(f'Accuracy: {np.round(accuracy,3)}%')
+    accuracy = 100 * correct / total
+    print(f'Accuracy: {np.round(accuracy,3)}%')
 
